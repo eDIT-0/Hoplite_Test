@@ -9,6 +9,6 @@
     "start": "node server.mjs",
     "dev": "node server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check public/app.js"
+    "check": "node --check server.mjs && node --check public/app.js && node --check public/chat.js"
   }
 }
