@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hoplite Local</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="mark">H</span> Hoplite <span class="local">LOCAL</span></a>
+    <p class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</p>
+    <label for="project">Проект</label>
+    <select id="project" disabled><option value="">Подключите аккаунт</option></select>
+    <button id="new-thread" class="primary" disabled>＋ Новый диалог</button>
+    <div class="section-heading"><h2>Диалоги</h2><button id="refresh" class="quiet" disabled aria-label="Обновить данные">↻</button></div>
+    <nav id="threads" aria-label="Диалоги"><p class="muted">Здесь появятся ваши задачи.</p></nav>
+    <button id="more-threads" class="quiet" hidden>Ещё диалоги</button>
+    <div class="sidebar-footer"><span class="dot"></span> Интерфейс на вашем компьютере<br><span class="muted">Агент работает в облаке Hoplite</span></div>
+  </aside>
+  <main>
+    <header class="topbar">
+      <div><p class="eyebrow">HOPLITE / ЧАТ</p><h1 id="title">Новый диалог</h1></div>
+      <div class="balance"><span class="muted">Остаток кредитов</span><strong id="credits">—</strong><small id="held">Нет данных аккаунта</small></div>
+    </header>
+    <div id="notice" role="status" hidden></div>
+    <section id="setup" class="setup" hidden>
+      <span class="eyebrow">ПЕРВОЕ ПОДКЛЮЧЕНИЕ</span><h2>Ваш Hoplite. В простом окне.</h2>
+      <p>Диалоги, задачи и баланс — без лишних панелей. Подключите API-ключ организации, чтобы начать.</p>
+      <ol><li>Создайте ключ в настройках Hoplite с доступом к проектам, диалогам и расходам.</li><li>Откройте файл <code>.env</code> рядом с <code>start.cmd</code> и заполните <code>HOPLITE_API_KEY</code>.</li><li>Перезапустите <code>start.cmd</code> и обновите эту страницу.</li></ol>
+      <p class="muted">Ключ остаётся на локальном сервере. Не присылайте его в чат и не добавляйте в Git.</p>
+      <a href="https://hoplite.sh/docs/api" target="_blank" rel="noreferrer">Документация API ↗</a>
+    </section>
+    <section id="conversation" aria-label="Переписка">
+      <button id="older" class="quiet" hidden>Загрузить предыдущие сообщения</button>
+      <div id="messages"><div class="empty"><span class="empty-icon">↗</span><h2>Над чем поработаем?</h2><p>Выберите проект и опишите задачу.<br>Ответы агента появятся здесь.</p></div></div>
+    </section>
+    <section class="composer-area">
+      <div class="thread-meta"><span id="thread-status">Не подключено</span><span id="current-model">Модель диалога: —</span><span id="usage"></span></div>
+      <p id="approval-note" class="muted" hidden>Агент ожидает действия. Если требуется подтверждение доступа или инструмента, откройте этот диалог в основном интерфейсе Hoplite.</p>
+      <form id="composer">
+        <label class="sr-only" for="prompt">Сообщение агенту</label>
+        <textarea id="prompt" placeholder="Опишите задачу или задайте вопрос…" rows="3" maxlength="24000" disabled></textarea>
+        <div class="composer-controls"><label for="model">Следующий запуск<select id="model" disabled><option value="">По умолчанию</option></select></label><div class="actions"><button id="stop" type="button" class="quiet" hidden>Остановить</button><button id="send" class="primary" type="submit" disabled>Отправить ↑</button></div></div>
+      </form>
+      <p class="footnote">Ctrl + Enter — отправить · Обновление каждые 5 сек. · Запуски расходуют лимиты аккаунта</p>
+    </section>
+  </main>
+</body>
+</html>
