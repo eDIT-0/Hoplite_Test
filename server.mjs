@@ -11,6 +11,7 @@ const THREAD_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const STATIC_FILES = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
+  ['/chat.js', ['chat.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
 ]);
 const QUERY_PARAMS = new Map([
@@ -35,7 +36,7 @@ function json(res, status, value) {
 function genericUpstreamError(status) {
   const messages = {
     400: 'Запрос к API отклонён.',
-    401: 'API отклонил авторизацию.',
+    401: 'API отклонил авторизацию. Проверьте API-ключ и его права.',
     402: 'Для запроса требуется доступный тариф или баланс.',
     403: 'Недостаточно прав для запроса к API.',
     404: 'Ресурс API не найден.',
@@ -228,7 +229,9 @@ export function createApp({ apiKey = '', fetchImpl = fetch, publicDir = path.joi
       }
       if (!upstream.ok) {
         const status = upstream.status >= 400 && upstream.status <= 599 ? upstream.status : 502;
-        json(res, status, { error: genericUpstreamError(status) });
+        const permissionHint = method === 'GET' && route.path.startsWith('/api/threads') && !route.path.endsWith('/usage') && [401, 403].includes(status)
+          ? ' Для получения диалогов и ответов ключу требуется thread:read и доступ к этому проекту.' : '';
+        json(res, status, { error: genericUpstreamError(status) + permissionHint });
         return;
       }
       if (upstream.status === 204) {

@@ -1,5 +1,7 @@
+import { syncConversation } from './chat.js';
+
 const $ = (id) => document.getElementById(id);
-const state = { connected: false, busy: false, thread: null, revision: 0, messages: new Map(), cursor: null, threadCursor: null, pending: null };
+const state = { connected: false, busy: false, thread: null, revision: 0, messages: new Map(), cursor: null, threadCursor: null, pending: null, historyLoaded: false };
 const statuses = { queued: 'В очереди', running: 'Агент работает', waiting: 'Ожидает действия', blocked: 'Требуется действие', ready: 'Готово', failed: 'Ошибка запуска', archived: 'В архиве' };
 const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 3 });
 
@@ -14,7 +16,9 @@ async function api(path, { body, key } = {}) {
     headers: body ? { 'Content-Type': 'application/json', 'Idempotency-Key': key } : {},
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(35000),
+    cache: 'no-store',
   });
+  if (response.status === 204) return { ok: true };
   const data = await response.json();
   if (!response.ok || data.ok === false) throw new Error(typeof data.error === 'string' ? data.error : `Ошибка API (${response.status})`);
   return data;
@@ -41,6 +45,8 @@ function resetThread() {
   $('thread-status').textContent = 'Готов к новой задаче';
   $('current-model').textContent = 'Модель диалога: по умолчанию';
   $('usage').textContent = '';
+  $('sync-status').textContent = 'Получение сообщений: выберите диалог';
+  state.historyLoaded = false;
   $('stop').hidden = true;
   $('approval-note').hidden = true;
   $('older').hidden = true;
@@ -124,7 +130,8 @@ function renderMessages() {
     article.className = `message ${message.role === 'user' ? 'user' : message.kind === 'status' ? 'status' : 'assistant'}`;
     const header = document.createElement('header');
     const name = message.role === 'user' ? 'Вы' : message.role === 'assistant' ? 'Hoplite' : 'Система';
-    header.textContent = `${name} · ${new Date(message.createdAt).toLocaleString('ru-RU')}`;
+    const date = new Date(message.createdAt);
+    header.textContent = Number.isNaN(date.getTime()) ? name : `${name} · ${date.toLocaleString('ru-RU')}`;
     const content = document.createElement('div');
     content.className = 'content';
     textWithLinks(content, message.content);
@@ -150,19 +157,38 @@ async function refreshThread(older = false) {
   const id = encodeURIComponent(state.thread.id);
   const query = new URLSearchParams({ limit: '100', activityLimit: '50' });
   if (older && state.cursor) query.set('cursor', state.cursor);
-  const [detail, history] = await Promise.all([api(`/api/threads/${id}`), api(`/api/threads/${id}/messages?${query}`)]);
-  if (revision !== state.revision) return;
-  state.thread = detail.thread;
-  showThread(detail.thread);
-  const wasEmpty = state.messages.size === 0;
-  let changed = false;
-  for (const message of history.messages) {
-    if (JSON.stringify(state.messages.get(message.id)) !== JSON.stringify(message)) changed = true;
-    state.messages.set(message.id, message);
+  $('sync-status').textContent = 'Получение сообщений…';
+  try {
+    const warning = await syncConversation({
+      api, id, query,
+      onThread(thread) {
+        if (revision !== state.revision) return;
+        state.thread = thread;
+        showThread(thread);
+      },
+      onHistory(history) {
+        if (revision !== state.revision) return;
+        const firstLoad = !state.historyLoaded;
+        let changed = false;
+        for (const message of history.messages) {
+          if (JSON.stringify(state.messages.get(message.id)) !== JSON.stringify(message)) changed = true;
+          state.messages.set(message.id, message);
+        }
+        if (firstLoad || older) state.cursor = history.nextCursor;
+        state.historyLoaded = true;
+        $('older').hidden = !state.cursor;
+        if (changed || firstLoad) renderMessages();
+        const time = new Date().toLocaleTimeString('ru-RU');
+        $('sync-status').textContent = `Синхронизировано ${time} · сообщений: ${state.messages.size}`
+          + (history.skipped ? ` · пропущено некорректных: ${history.skipped}` : '');
+      },
+    });
+    if (revision === state.revision && warning) $('sync-status').textContent = warning;
+  } catch (error) {
+    if (revision !== state.revision) return;
+    $('sync-status').textContent = error.message;
+    throw error;
   }
-  if (wasEmpty || older) state.cursor = history.hasMore ? history.nextCursor : null;
-  $('older').hidden = !state.cursor;
-  if (changed || wasEmpty) renderMessages();
 }
 
 async function refreshBilling() {
@@ -204,7 +230,7 @@ $('composer').onsubmit = async (event) => {
     sent = true;
     state.pending = null;
     $('prompt').value = '';
-    if (result.thread) { state.thread = result.thread; state.revision++; showThread(result.thread); }
+    if (result.thread) { state.thread = result.thread; state.revision++; state.historyLoaded = false; showThread(result.thread); }
     await Promise.all([loadThreads(), refreshThread(), refreshBilling(), refreshUsage()]);
   } catch (error) {
     notice(sent ? `Задача отправлена, но обновить данные не удалось: ${error.message}` : `${error.message}\nЕсли ответ потерялся, повторите отправку без изменения текста: будет использован тот же идентификатор запроса.`);
@@ -293,5 +319,10 @@ async function poll() {
   }
   setTimeout(poll, 5000);
 }
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && state.connected && !state.busy) {
+    refreshThread().catch((error) => notice(error.message));
+  }
+});
 await init();
 poll();

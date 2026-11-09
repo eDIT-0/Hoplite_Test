@@ -229,15 +229,16 @@ test('upstream error bodies and fetch exceptions are redacted', async (t) => {
   });
 });
 
-test('serves only the three explicit local files with security headers', async () => {
+test('serves only the explicit local files with security headers', async () => {
   const publicDir = await mkdtemp(path.join(os.tmpdir(), 'hoplite-public-'));
   try {
     await mkdir(publicDir, { recursive: true });
     await writeFile(path.join(publicDir, 'index.html'), '<!doctype html><script src="/app.js"></script>');
     await writeFile(path.join(publicDir, 'app.js'), 'console.log("ok")');
+    await writeFile(path.join(publicDir, 'chat.js'), 'export const ready = true;');
     await writeFile(path.join(publicDir, 'style.css'), 'body { color: black; }');
     await withServer({ publicDir, fetchImpl: async () => { throw new Error('unexpected upstream call'); } }, async (url) => {
-      for (const [pathname, type] of [['/', 'text/html'], ['/app.js', 'text/javascript'], ['/style.css', 'text/css']]) {
+      for (const [pathname, type] of [['/', 'text/html'], ['/app.js', 'text/javascript'], ['/chat.js', 'text/javascript'], ['/style.css', 'text/css']]) {
         const response = await request(url, pathname);
         assert.equal(response.status, 200);
         assert.match(response.headers.get('content-type'), new RegExp(type));
@@ -251,4 +252,14 @@ test('serves only the three explicit local files with security headers', async (
   } finally {
     await rm(publicDir, { recursive: true, force: true });
   }
+});
+
+test('message read denial explains thread:read without disclosing upstream data', async () => {
+  await withServer({ apiKey: TEST_KEY, fetchImpl: async () => jsonResponse({ secret: TEST_KEY }, 403) }, async (url) => {
+    const response = await request(url, '/api/threads/test/messages');
+    assert.equal(response.status, 403);
+    const text = await response.text();
+    assert.match(text, /thread:read/);
+    assert.equal(text.includes(TEST_KEY), false);
+  });
 });
